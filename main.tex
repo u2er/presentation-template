@@ -47,24 +47,180 @@
 \let\varsigma\sigma                                                                            
 \DeclareMathSymbol{\varphi}{\mathord}{greek}{"27}
 
-\title{Казуистические основы формалировки заголовков презентаций в~академических традициях Сибири}
-\author{Томский~А.~Б.}
+\title{Разработка нейросетевой модели преобразования изображения геометрических фигур в~JSON-описание}
+\author{}
 \date{\today}
 
 \begin{document}
 \maketitle
 
 \begin{frame}
-\frametitle{ТГУ}
-\framesubtitle{Томский государственный университет}
+\frametitle{Введение и актуальность}
+\framesubtitle{Задача структуризации визуальной информации}
+\begin{itemize}
+  \item Множество прикладных задач требует перевода растрового изображения в~\textbf{структурированное машиночитаемое описание} (векторизация, распознавание схем, диаграмм, чертежей).
+  \item Классические алгоритмы (поиск контуров, аппроксимация) хрупки к~перекрытиям фигур, шуму и~вариативности форм.
+  \item \textbf{Идея:} рассматривать задачу как \emph{image-to-sequence} --- сквозное (end-to-end) обучение нейросети, порождающей готовый JSON.
+  \item Модельный полигон: изображения с~прямоугольниками, эллипсами и~треугольниками произвольного цвета.
+\end{itemize}
 \end{frame}
 
 \begin{frame}
-\frametitle{UML}
-\framesubtitle{Пример диаграммы UML}
+\frametitle{Цель и задачи}
+\framesubtitle{Что требуется сделать}
+\textbf{Цель:} построить нейросетевую модель, преобразующую RGB-изображение геометрических фигур в~корректное JSON-описание сцены.
+
+\medskip
+\textbf{Задачи:}
+\begin{enumerate}
+  \item Сформировать синтетический датасет «изображение~$\to$~JSON».
+  \item Спроектировать архитектуру кодер-декодер на~базе трансформера.
+  \item Обучить модель в~режиме максимизации правдоподобия (MLE).
+  \item Дообучить модель методом обучения с~подкреплением (RL).
+  \item Оценить качество по~метрикам детекции и~геометрической близости.
+\end{enumerate}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Постановка задачи}
+\framesubtitle{Вход и выход модели}
+\textbf{Вход:} RGB-изображение $H\times W$ (до~$512\times512$), содержащее от~1 до~10 фигур.
+
+\medskip
+\textbf{Выход:} строка JSON --- список объектов. Каждый объект задаёт тип фигуры~\texttt{t}, цвет~\texttt{c} и~геометрию (\texttt{bb} --- bounding box либо \texttt{pts} --- вершины):
+\begin{verbatim}
+[{"t":"ellipse","c":"#71381c","bb":[7,64,137,89]},
+ {"t":"triangle","c":"#ff001c",
+  "pts":[220,396,228,436,250,383]}]
+\end{verbatim}
+\end{frame}
+
+\begin{frame}
+\frametitle{Синтетический датасет}
+\framesubtitle{Генерация пар «изображение~--~JSON»}
+\begin{itemize}
+  \item $\sim$\textbf{100\,000} примеров, генерируемых процедурно (PIL).
+  \item Случайные размеры холста, тип, цвет и~положение фигур (палитра из~$10^3$ цветов).
+  \item \textbf{Контроль видимости:} фигуры рисуются на~маске уникальными ID; объекты, перекрытые сверху и~занимающие $<100$~пикселей, исключаются из~разметки.
+  \item Треугольники проверяются на~вырожденность по~формуле площади Гаусса (порог~150).
+  \item Гарантия: JSON описывает только \emph{реально видимые} фигуры $\Rightarrow$ согласованность входа и~цели.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Архитектура модели}
+\framesubtitle{Кодер-декодер на~базе трансформера (image-to-sequence)}
+\begin{columns}
+\begin{column}{0.5\textwidth}
+\textbf{Кодер изображения (ViT-подобный):}
+\begin{itemize}
+  \item Разбиение на~патчи $16\times16$.
+  \item Линейная проекция в~$d=512$.
+  \item Обучаемое 2D-позиционное кодирование.
+  \item $6$ слоёв \texttt{TransformerEncoder}.
+\end{itemize}
+\end{column}
+\begin{column}{0.5\textwidth}
+\textbf{Декодер текста (JSON):}
+\begin{itemize}
+  \item Посимвольный токенайзер.
+  \item 1D-позиционное кодирование.
+  \item $6$ слоёв \texttt{TransformerDecoder} с~cross-attention к~патчам.
+  \item Авторегрессионная генерация символов.
+\end{itemize}
+\end{column}
+\end{columns}
+\medskip
+\centering
+\small Параметры: $d_{model}=512$, \quad heads $=8$, \quad layers $=6$, \quad patch $=16$.
+\end{frame}
+
+\begin{frame}
+\frametitle{Кодирование и токенизация}
+\framesubtitle{Детали представления данных}
+\begin{itemize}
+  \item \textbf{Патчи:} операция \texttt{unfold} нарезает изображение на~неперекрывающиеся блоки $16\times16\times3$, каждый проецируется в~вектор размерности~512.
+  \item \textbf{2D-позиции:} отдельные обучаемые эмбеддинги по~осям $X$ и~$Y$, конкатенируемые в~единый вектор позиции патча.
+  \item \textbf{Токенайзер:} словарь из~символов \texttt{[a-zA-Z0-9]} и~служебных \verb|{}[]":,-#| плюс спецтокены \texttt{<pad>}, \texttt{<sos>}, \texttt{<eos>}.
+  \item Посимвольный подход исключает проблему неизвестных токенов и~делает словарь компактным.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Обучение: этап~1 (MLE)}
+\framesubtitle{Максимизация правдоподобия с~teacher forcing}
+\begin{itemize}
+  \item Режим \emph{teacher forcing}: декодер получает истинный префикс, предсказывает следующий символ.
+  \item Функция потерь --- \textbf{кросс-энтропия} с~маскированием паддинга.
+  \item Оптимизатор Adam ($\mathrm{lr}=10^{-4}$), косинусный отжиг скорости обучения.
+  \item Каузальная маска внимания запрещает «заглядывать вперёд».
+  \item Результат этапа: модель учится синтаксически корректному JSON и~базовой геометрии.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Обучение: этап~2 (RL-дообучение)}
+\framesubtitle{REINFORCE с~гибридной функцией потерь}
+\begin{itemize}
+  \item \textbf{Проблема MLE:} оптимизирует посимвольное совпадение, а~не~геометрическое качество сцены.
+  \item Модель \emph{сэмплирует} полный JSON, который декодируется в~набор фигур.
+  \item \textbf{Награда} $=$ качество сопоставления предсказанных и~истинных фигур по~IoU (с~учётом совпадения типа).
+  \item Алгоритм REINFORCE с~скользящим базлайном (снижение дисперсии).
+  \item Итоговый лосс: $\mathcal{L}=0.3\,\mathcal{L}_{MLE}+0.7\,\mathcal{L}_{RL}$ --- сохранение корректности при~оптимизации метрики.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Метрики оценки}
+\framesubtitle{Как измеряется качество}
+\begin{itemize}
+  \item \textbf{Доля валидного JSON} --- синтаксическая корректность вывода.
+  \item Сопоставление фигур по~жадному алгоритму: совпадение типа, близость цвета, $\mathrm{IoU}\ge0.5$.
+  \item \textbf{Precision} (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
+  \item \textbf{Средний IoU} по~совпавшим фигурам --- геометрическая точность.
+  \item Анализ \emph{пропущенных} (False Negatives) и~\emph{лишних} (False Positives) фигур.
+  \item Постобработка: дедупликация близких по~IoU и~цвету предсказаний.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Результаты}
+\framesubtitle{Пример точной реконструкции сцены (9~фигур)}
 \begin{figure}[h]
-\includegraphics[width=9cm,height=5cm,keepaspectratio]{demo-uml.pdf}
+\includegraphics[width=11cm,keepaspectratio]{result-good}
 \end{figure}
+\centering
+\small Все фигуры распознаны верно: TP\,=\,9, лишних\,=\,0, пропущенных\,=\,0.
+\end{frame}
+
+\begin{frame}
+\frametitle{Анализ ошибок}
+\framesubtitle{Типичные расхождения модели}
+\begin{figure}[h]
+\includegraphics[width=11cm,keepaspectratio]{result-errors}
+\end{figure}
+\centering
+\small Малая фигура пропущена (False Negative), близкий дубликат добавлен лишним (False Positive).
+\end{frame}
+
+\begin{frame}
+\frametitle{Заключение}
+\framesubtitle{Итоги и направления развития}
+\textbf{Итоги:}
+\begin{itemize}
+  \item Реализована сквозная модель image-to-sequence, порождающая корректное JSON-описание сцены геометрических фигур.
+  \item Двухэтапное обучение (MLE\,$+$\,RL) повышает геометрическое качество сверх посимвольного правдоподобия.
+\end{itemize}
+\textbf{Направления развития:}
+\begin{itemize}
+  \item Расширение набора типов фигур и~переход к~реальным изображениям.
+  \item Учёт цвета и~порядка перекрытия (z-order) в~функции награды.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Спасибо за~внимание}
+\framesubtitle{Готов ответить на~вопросы}
 \end{frame}
 
 \end{document}
