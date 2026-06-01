@@ -179,7 +179,6 @@
   \item \textbf{Precision} (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
   \item \textbf{Средний IoU} по~совпавшим фигурам --- геометрическая точность.
   \item Анализ \emph{пропущенных} (False Negatives) и~\emph{лишних} (False Positives) фигур.
-  \item Постобработка: дедупликация близких по~IoU и~цвету предсказаний.
 \end{itemize}
 \end{frame}
 
@@ -191,16 +190,6 @@
 \end{figure}
 \centering
 \small Все фигуры распознаны верно: TP\,=\,9, лишних\,=\,0, пропущенных\,=\,0.
-\end{frame}
-
-\begin{frame}
-\frametitle{Анализ ошибок}
-\framesubtitle{Типичные расхождения модели}
-\begin{figure}[h]
-\includegraphics[width=11cm,keepaspectratio]{result-errors}
-\end{figure}
-\centering
-\small Малая фигура пропущена (False Negative), близкий дубликат добавлен лишним (False Positive).
 \end{frame}
 
 \begin{frame}
@@ -216,11 +205,6 @@
   \item Расширение набора типов фигур и~переход к~реальным изображениям.
   \item Учёт цвета и~порядка перекрытия (z-order) в~функции награды.
 \end{itemize}
-\end{frame}
-
-\begin{frame}
-\frametitle{Спасибо за~внимание}
-\framesubtitle{Готов ответить на~вопросы}
 \end{frame}
 
 \end{document}
