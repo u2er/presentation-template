@@ -8,10 +8,13 @@
 \usepackage{psfrag}
 \usepackage{hyperref}
 \usepackage[normalem]{ulem}
+\usepackage{tabularx}
+\usepackage{booktabs}
 
 \beamertemplatenavigationsymbolsempty
 \setbeamertemplate{footline}[frame number]
 \usecolortheme{seahorse}
+\setbeamerfont{footnote}{size=\tiny}
 
 %%Исправляем греческие буквы в формулах, они должны быть прямыми, а не курсивными
 \DeclareSymbolFont{greek}{U}{eur}{m}{n}                                                        
@@ -81,18 +84,27 @@
 \end{enumerate}
 \end{frame}
 
-\begin{frame}[fragile]
+\begin{frame}[fragile,shrink=8]
 \frametitle{Постановка задачи}
 \framesubtitle{Вход и выход модели}
-\textbf{Вход:} RGB-изображение $H\times W$ (до~$512\times512$), содержащее от~1 до~10 фигур.
+\begin{columns}[T]
+\begin{column}{0.62\textwidth}
+\textbf{Вход:} RGB-изображение $H\times W$ (до~$512\times512$), от~1 до~10 фигур.
 
-\medskip
-\textbf{Выход:} строка JSON\footnote{\textbf{JSON} (JavaScript Object Notation) --- текстовый формат представления структурированных данных в~виде пар ключ--значение и~массивов.} --- список объектов. Каждый объект задаёт тип фигуры~\texttt{t}, цвет~\texttt{c} и~геометрию (\texttt{bb} --- bounding box либо \texttt{pts} --- вершины):
+\smallskip
+\textbf{Выход:} строка JSON\footnote{\textbf{JSON} (JavaScript Object Notation) --- текстовый формат представления структурированных данных в~виде пар ключ--значение и~массивов.} --- список объектов. Каждый объект задаёт тип фигуры~\texttt{t}, цвет~\texttt{c} и~геометрию (\texttt{bb}~--- bounding box либо \texttt{pts}~--- вершины):
 \begin{verbatim}
-[{"t":"ellipse","c":"#71381c","bb":[7,64,137,89]},
+[{"t":"ellipse","c":"#71381c",
+  "bb":[7,64,137,89]},
  {"t":"triangle","c":"#ff001c",
   "pts":[220,396,228,436,250,383]}]
 \end{verbatim}
+\end{column}
+\begin{column}{0.35\textwidth}
+\centering
+\includegraphics[width=\columnwidth,keepaspectratio]{example}\\[0.3em]
+\end{column}
+\end{columns}
 \end{frame}
 
 \begin{frame}
@@ -176,24 +188,46 @@
 
 \begin{frame}
 \frametitle{Метрики оценки}
-\framesubtitle{Как измеряется качество}
+\framesubtitle{Результаты на тестовой выборке}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
 \begin{itemize}
-  \item \textbf{Доля валидного JSON} --- синтаксическая корректность вывода.
-  \item Сопоставление фигур по~жадному алгоритму: совпадение типа, близость цвета, $\mathrm{IoU}\ge0.5$\footnote{\textbf{IoU} (Intersection over Union) $= S(\cap)/S(\cup)$; порог~0.5 --- стандарт PASCAL VOC для~детекции объектов.}.
-  \item \textbf{Precision}\footnote{\textbf{Precision}~$= \mathrm{TP}/(\mathrm{TP}+\mathrm{FP})$; \textbf{Recall}~$= \mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$; \textbf{F1}~$= 2PR/(P+R)$. \textbf{TP}~--- верно найденная, \textbf{FP}~--- лишняя, \textbf{FN}~--- пропущенная фигура.} (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
-  \item \textbf{Средний IoU} по~совпавшим фигурам --- геометрическая точность.
-  \item Анализ \emph{пропущенных} (False Negatives) и~\emph{лишних} (False Positives) фигур.
+  \item \textbf{Доля валидного JSON} --- синтаксическая корректность.
+  \item Сопоставление по~жадному алгоритму: тип, цвет, $\mathrm{IoU}\ge0.5^{\,a}$.
+  \item \textbf{Precision}$^b$ (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
+  \item \textbf{Средний IoU} --- геометрическая точность совпавших фигур.
 \end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+\centering
+\vspace{0.8em}
+\begin{tabular*}{\columnwidth}{@{\extracolsep{\fill}}lc}
+\toprule
+\textbf{Метрика} & \textbf{Значение} \\
+\midrule
+Precision    & \textbf{0.95} \\
+Recall       & \textbf{0.94} \\
+F1-score     & \textbf{0.94} \\
+Средний IoU  & \textbf{0.94} \\
+\bottomrule
+\end{tabular*}
+\end{column}
+\end{columns}
+\vfill
+{\tiny\rule{\textwidth}{0.4pt}\\[0.3ex]%
+$^a$\textbf{IoU} $= S(\cap)/S(\cup)$ --- геометрическое перекрытие; порог~0.5 --- стандарт PASCAL~VOC.\quad
+$^b$\textbf{P}~$=\mathrm{TP}/(\mathrm{TP}+\mathrm{FP})$, \textbf{R}~$=\mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$, \textbf{F1}~$=2PR/(P+R)$; TP/FP/FN~--- верно~найденная\,/\,лишняя\,/\,пропущенная.}
 \end{frame}
 
-\begin{frame}
+\begin{frame}[shrink=5]
 \frametitle{Результаты}
-\framesubtitle{Пример реконструкции сцены (9~фигур)}
-\begin{figure}[h]
-\includegraphics[width=\textwidth,keepaspectratio]{result}
-\end{figure}
-\centering
-\small Все фигуры распознаны верно: TP\,=\,9, лишних\,=\,0, пропущенных\,=\,0.
+\framesubtitle{Примеры реконструкции сцен}
+\begin{center}
+\includegraphics[width=\textwidth,keepaspectratio]{result}\\[0.15em]
+{\small Пример~1 (9~фигур): TP\,=\,9, FP\,=\,0, FN\,=\,0}\\[0.6em]
+\includegraphics[width=\textwidth,keepaspectratio]{result2}\\[0.15em]
+{\small Пример~2 (8~фигур): TP\,=\,8, FP\,=\,0, FN\,=\,0}
+\end{center}
 \end{frame}
 
 \begin{frame}
