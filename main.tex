@@ -87,7 +87,7 @@
 \textbf{Вход:} RGB-изображение $H\times W$ (до~$512\times512$), содержащее от~1 до~10 фигур.
 
 \medskip
-\textbf{Выход:} строка JSON --- список объектов. Каждый объект задаёт тип фигуры~\texttt{t}, цвет~\texttt{c} и~геометрию (\texttt{bb} --- bounding box либо \texttt{pts} --- вершины):
+\textbf{Выход:} строка JSON\footnote{\textbf{JSON} (JavaScript Object Notation) --- текстовый формат представления структурированных данных в~виде пар ключ--значение и~массивов.} --- список объектов. Каждый объект задаёт тип фигуры~\texttt{t}, цвет~\texttt{c} и~геометрию (\texttt{bb} --- bounding box либо \texttt{pts} --- вершины):
 \begin{verbatim}
 [{"t":"ellipse","c":"#71381c","bb":[7,64,137,89]},
  {"t":"triangle","c":"#ff001c",
@@ -112,7 +112,7 @@
 \framesubtitle{Кодер-декодер на~базе трансформера (image-to-sequence)}
 \begin{columns}
 \begin{column}{0.5\textwidth}
-\textbf{Кодер изображения (ViT-подобный):}
+\textbf{Кодер изображения (ViT\footnotemark-подобный):}
 \begin{itemize}
   \item Разбиение на~патчи $16\times16$.
   \item Линейная проекция в~$d=512$.
@@ -125,12 +125,16 @@
 \begin{itemize}
   \item Посимвольный токенайзер.
   \item 1D-позиционное кодирование.
-  \item $6$ слоёв \texttt{TransformerDecoder} с~cross-attention к~патчам.
+  \item $6$ слоёв \texttt{TransformerDecoder} с~cross-attention\footnotemark\ к~патчам.
   \item Авторегрессионная генерация символов.
 \end{itemize}
 \end{column}
 \end{columns}
-\medskip
+\addtocounter{footnote}{-1}%
+\footnotetext{\textbf{ViT} (Vision Transformer) --- изображение делится на~патчи, каждый проецируется в~вектор и~обрабатывается self-attention.}%
+\stepcounter{footnote}%
+\footnotetext{\textbf{Cross-attention}: запросы~($Q$) из~декодера, ключи~($K$) и~значения~($V$) --- из~памяти кодера (патчей).}%
+\smallskip
 \centering
 \small Параметры: $d_{model}=512$, \quad heads $=8$, \quad layers $=6$, \quad patch $=16$.
 \end{frame}
@@ -150,7 +154,8 @@
 \frametitle{Обучение: этап~1 (MLE)}
 \framesubtitle{Максимизация правдоподобия с~teacher forcing}
 \begin{itemize}
-  \item Режим \emph{teacher forcing}: декодер получает истинный префикс, предсказывает следующий символ.
+  \item \textbf{MLE}\footnote{\textbf{MLE} (Maximum Likelihood Estimation, метод максимального правдоподобия) --- обучение путём максимизации $P(\text{цель}\mid\text{вход})$, что эквивалентно минимизации кросс-энтропии.}: на~каждом шаге декодер предсказывает следующий символ.
+  \item Режим \emph{teacher forcing}\footnote{\textbf{Teacher forcing} --- стратегия обучения декодера: на~каждом шаге вместо собственного предсказания модели на~вход подаётся истинный предыдущий токен из~разметки.}: декодер получает истинный префикс, предсказывает следующий символ.
   \item Функция потерь --- \textbf{кросс-энтропия} с~маскированием паддинга.
   \item Оптимизатор Adam ($\mathrm{lr}=10^{-4}$).
   \item Результат этапа: модель учится синтаксически корректному JSON и~базовой геометрии.
@@ -163,7 +168,8 @@
 \begin{itemize}
   \item \textbf{Проблема MLE:} оптимизирует посимвольное совпадение, а~не~геометрическое качество сцены.
   \item Модель \emph{сэмплирует} полный JSON, который декодируется в~набор фигур.
-  \item \textbf{Награда} $=$ качество сопоставления предсказанных и~истинных фигур по~IoU (с~учётом совпадения типа).
+  \item \textbf{Награда} $=$ качество сопоставления предсказанных и~истинных фигур по~IoU\footnote{\textbf{IoU} (Intersection over Union) $= S(\cap)/S(\cup)$ --- мера геометрического перекрытия; $\mathrm{IoU}=1$ при~идеальном совпадении.} (с~учётом совпадения типа).
+  \item Скользящий базовый уровень EMA\footnote{\textbf{EMA} (Exponential Moving Average) --- $b_t = \beta b_{t-1}+(1-\beta)r_t$. \textbf{REINFORCE} --- градиент политики: $\nabla_\theta \mathcal{L}_{RL} = -\mathbb{E}[(r-b)\nabla_\theta \log\pi_\theta(a)]$.} снижает дисперсию градиента.
   \item Итоговый лосс: $\mathcal{L}=0.3\,\mathcal{L}_{MLE}+0.7\,\mathcal{L}_{RL}$ --- сохранение корректности при~оптимизации метрики.
 \end{itemize}
 \end{frame}
@@ -173,8 +179,8 @@
 \framesubtitle{Как измеряется качество}
 \begin{itemize}
   \item \textbf{Доля валидного JSON} --- синтаксическая корректность вывода.
-  \item Сопоставление фигур по~жадному алгоритму: совпадение типа, близость цвета, $\mathrm{IoU}\ge0.5$.
-  \item \textbf{Precision} (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
+  \item Сопоставление фигур по~жадному алгоритму: совпадение типа, близость цвета, $\mathrm{IoU}\ge0.5$\footnote{\textbf{IoU} (Intersection over Union) $= S(\cap)/S(\cup)$; порог~0.5 --- стандарт PASCAL VOC для~детекции объектов.}.
+  \item \textbf{Precision}\footnote{\textbf{Precision}~$= \mathrm{TP}/(\mathrm{TP}+\mathrm{FP})$; \textbf{Recall}~$= \mathrm{TP}/(\mathrm{TP}+\mathrm{FN})$; \textbf{F1}~$= 2PR/(P+R)$. \textbf{TP}~--- верно найденная, \textbf{FP}~--- лишняя, \textbf{FN}~--- пропущенная фигура.} (точность), \textbf{Recall} (полнота), \textbf{F1-score}.
   \item \textbf{Средний IoU} по~совпавшим фигурам --- геометрическая точность.
   \item Анализ \emph{пропущенных} (False Negatives) и~\emph{лишних} (False Positives) фигур.
 \end{itemize}
@@ -184,7 +190,7 @@
 \frametitle{Результаты}
 \framesubtitle{Пример реконструкции сцены (9~фигур)}
 \begin{figure}[h]
-\includegraphics[width=11cm,keepaspectratio]{result}
+\includegraphics[width=\textwidth,keepaspectratio]{result}
 \end{figure}
 \centering
 \small Все фигуры распознаны верно: TP\,=\,9, лишних\,=\,0, пропущенных\,=\,0.
